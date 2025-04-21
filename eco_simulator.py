@@ -1702,3 +1702,5 @@ def create_savings_visualization(trigger, complete, steps, results):
 # ========================
 if __name__ == '__main__':
     app.run_server(debug=True, port=8051) 
+
+server = app.server
