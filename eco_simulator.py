@@ -905,7 +905,7 @@ app.layout = html.Div([
     ], className="terryOne-header"),
     
     html.Div([
-        html.H2("КАЛЬКУЛЯТОР ЭКОНОМИЧЕСКОЙ ЭФФЕКТИВНОСТИ"),
+        html.H2("КАЛЬКУЛЯТОР ЭКОНОМИЧЕСКОЙ ЭФФЕКТИВНОСТИ", className="text-center"),
         
         dbc.Container([
             # Сцена с динамическими объектами
@@ -1089,7 +1089,7 @@ app.layout = html.Div([
                                             dbc.Col([
                                                 html.Label("Экономия энергии", htmlFor="energy-saving-percent", className="form-label"),
                                                 dbc.InputGroup([
-                                                    dbc.Input(id="energy-saving-percent", type="number", value=33),
+                                                    dbc.Input(id="energy-saving-percent", type="number", value=33, disabled=True),
                                                     dbc.InputGroupText("%"),
                                                 ]),
                                                 html.Div("Рассчитывается на основе разницы температур", className="form-text text-muted mt-1"),
@@ -1098,7 +1098,7 @@ app.layout = html.Div([
                                             dbc.Col([
                                                 html.Label("Экономия химии", htmlFor="chemical-saving-percent", className="form-label"),
                                                 dbc.InputGroup([
-                                                    dbc.Input(id="chemical-saving-percent", type="number", value=30),
+                                                    dbc.Input(id="chemical-saving-percent", type="number", value=30, disabled=True),
                                                     dbc.InputGroupText("%"),
                                                 ]),
                                             ], className="mb-3"),
@@ -1462,6 +1462,13 @@ def calculate_energy_saving(cotton_temp, hybrid_temp):
     if cotton_temp and hybrid_temp and cotton_temp > hybrid_temp:
         # Примерная формула: чем больше разница, тем больше экономия
         saving = round((cotton_temp - hybrid_temp) / cotton_temp * 100 * 0.9)  # 90% от пропорциональной разницы
+        return saving
+    return 0
+
+def calculate_chemical_saving(cotton_temp, hybrid_temp):
+    if cotton_temp and hybrid_temp and cotton_temp > hybrid_temp:
+        # Формула: при снижении температуры на ~40% снижается расход химии на ~30%
+        saving = round((cotton_temp - hybrid_temp) / cotton_temp * 100 * 0.75)  # 75% от пропорции
         return saving
     return 0
 
