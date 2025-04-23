@@ -429,6 +429,34 @@ app.index_string = """
                 transform: translateY(0);
             }
             
+            .negative-bar {
+                background-color: #ffebee !important;
+                border-left: 3px solid #c62828 !important;
+                box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
+                position: relative;
+            }
+            
+            .negative-bar:before {
+                content: "⚠️";
+                position: absolute;
+                right: 5px;
+                top: 50%;
+                transform: translateY(-50%);
+                font-size: 12px;
+            }
+            
+            .progress-cost_increase {
+                background-color: #c62828 !important;
+            }
+            
+            .progress-washing {
+                background-color: #00ACC1 !important;
+            }
+            
+            .progress-initial_saving {
+                background-color: #9C27B0 !important;
+            }
+            
             .current-total {
                 font-weight: 600;
                 color: #333;
@@ -452,6 +480,10 @@ app.index_string = """
             
             .progress-chemical {
                 background-color: #0066CC;
+            }
+            
+            .progress-equipment {
+                background-color: #8B4513;
             }
             
             .progress-replacement {
@@ -498,10 +530,9 @@ app.index_string = """
             }
             
             .step-description {
-                color: #666;
                 font-size: 0.9rem;
-                flex-grow: 1;
-                margin-right: 15px;
+                color: #666;
+                margin-top: 5px;
             }
             
             .final-summary {
@@ -641,6 +672,74 @@ app.index_string = """
                 opacity: 1;
             }
 
+            .savings-visualizer .step-description {
+                color: #5a6268;
+                font-size: 0.9rem;
+                margin: 4px 0;
+            }
+
+            .savings-visualizer .current-total {
+                font-size: 0.9rem;
+                margin-top: 4px;
+            }
+
+            /* Стили для секции метрик ресурсов */
+            .resource-metrics-section {
+                margin-bottom: 24px;
+                padding: 15px;
+                background-color: #f8f9fa;
+                border-radius: 8px;
+            }
+
+            .resource-metrics-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                gap: 16px;
+            }
+
+            .resource-metric {
+                padding: 12px;
+                background-color: white;
+                border-radius: 6px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                transition: transform 0.2s;
+            }
+
+            .resource-metric:hover {
+                transform: translateY(-3px);
+                box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+            }
+
+            .resource-metric-title {
+                font-weight: 600;
+                margin-bottom: 8px;
+                color: #2d3748;
+            }
+
+            /* Цвета для прогресс-баров метрик */
+            .progress-bar.bg-info {
+                background-color: #2196F3;
+            }
+
+            .progress-bar.bg-warning {
+                background-color: #FF9800;
+            }
+
+            .progress-bar.bg-success {
+                background-color: #4CAF50;
+            }
+
+            .progress-bar.bg-danger {
+                background-color: #E91E63;
+            }
+
+            /* Медиа-запросы для адаптивности */
+            @media (max-width: 768px) {
+                .resource-metrics-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+
         </style>
     </head>
     <body>
@@ -712,17 +811,33 @@ class TowelCalculator:
     @staticmethod
     def calculate_own_laundry_costs(inputs):
         """Расчет затрат для своей прачечной"""
-        # Базовые затраты на энергию для хлопка (зависит от температуры)
-        cotton_energy_base = inputs["energy_cost"] * (inputs["cotton_temp"] / 100)
-        # Затраты на энергию для гибрида с учетом экономии
-        hybrid_energy = cotton_energy_base * (1 - inputs["energy_saving_percent"] / 100)
+        # Усовершенствованная формула для расчета потребления энергии
+        # Базируется на физической модели нагрева воды: E = m*c*∆T
+        # где m - масса, c - теплоемкость, ∆T - разница температур
+        # Нормализуем с учетом стоимости энергии
+
+        # Базовые затраты на энергию для хлопка (зависит от нагрева от 20°C до температуры стирки)
+        cotton_energy_base = inputs["energy_cost"] * ((inputs["cotton_temp"] - 20) / 80)
+        
+        # Затраты на энергию для гибрида с учетом более низкой температуры
+        hybrid_energy_base = inputs["energy_cost"] * ((inputs["hybrid_temp"] - 20) / 80)
+        
+        # Применяем коэффициент экономии (дополнительный фактор экономии, помимо температуры)
+        hybrid_energy = hybrid_energy_base * (1 - 0.1)  # дополнительная 10% экономия за счет технологии
         
         # Затраты на химию для гибрида с учетом экономии
         hybrid_chemical = inputs["chemical_cost"] * (1 - inputs["chemical_saving_percent"] / 100)
         
+        # Расчет амортизации с учетом разной степени износа оборудования
+        # Гибридные полотенца снижают износ оборудования из-за более низкой температуры и меньшего веса
+        cotton_equipment_cost = inputs["equipment_cost"]
+        # Амортизация для гибрида с учетом экономии (15-25% в зависимости от температуры)
+        equipment_saving_percent = min(25, max(15, (inputs["cotton_temp"] - inputs["hybrid_temp"]) / 3))
+        hybrid_equipment_cost = inputs["equipment_cost"] * (1 - equipment_saving_percent / 100)
+        
         # Общие затраты за цикл
-        cotton_cycle_cost = cotton_energy_base + inputs["chemical_cost"] + inputs["water_cost"] + inputs["equipment_cost"]
-        hybrid_cycle_cost = hybrid_energy + hybrid_chemical + inputs["water_cost"] + inputs["equipment_cost"]
+        cotton_cycle_cost = cotton_energy_base + inputs["chemical_cost"] + inputs["water_cost"] + cotton_equipment_cost
+        hybrid_cycle_cost = hybrid_energy + hybrid_chemical + inputs["water_cost"] + hybrid_equipment_cost
         
         # Экономия за цикл
         cycle_saving = cotton_cycle_cost - hybrid_cycle_cost
@@ -732,6 +847,9 @@ class TowelCalculator:
             "hybrid_energy_cost": hybrid_energy,
             "cotton_chemical_cost": inputs["chemical_cost"],
             "hybrid_chemical_cost": hybrid_chemical,
+            "cotton_equipment_cost": cotton_equipment_cost,
+            "hybrid_equipment_cost": hybrid_equipment_cost,
+            "equipment_saving_percent": equipment_saving_percent,
             "cotton_cycle_cost": cotton_cycle_cost,
             "hybrid_cycle_cost": hybrid_cycle_cost,
             "cycle_saving": cycle_saving
@@ -760,17 +878,38 @@ class TowelCalculator:
         cotton_lifespan = inputs["cotton_cycles"] / cycles_per_year
         hybrid_lifespan = inputs["hybrid_cycles"] / cycles_per_year
         
-        # Количество замен за срок службы гибрида
-        cotton_replacements = hybrid_lifespan / cotton_lifespan
+        # Количество полотенец на один номер (обычно стандартный комплект: 2-3 шт)
+        towels_per_room = 3  # Можно вынести в параметры
         
-        # Экономия на заменах
-        replacement_saving = (cotton_replacements - 1) * inputs["cotton_cost"] * inputs["hotel_rooms"]
+        # Общее количество полотенец
+        total_towels = inputs["hotel_rooms"] * towels_per_room
+        
+        # Коэффициент скидки при оптовой закупке (на больших объемах скидка больше)
+        volume_discount = max(0, min(0.2, 0.05 + (inputs["hotel_rooms"] / 1000) * 0.15))
+        
+        # Учитываем оптовые скидки
+        cotton_cost_discounted = inputs["cotton_cost"] * (1 - volume_discount)
+        hybrid_cost_discounted = inputs["hybrid_cost"] * (1 - volume_discount)
+        
+        # Количество замен за срок службы гибрида
+        # Избегаем деления на ноль
+        if cotton_lifespan > 0:
+            cotton_replacements = hybrid_lifespan / cotton_lifespan
+        else:
+            cotton_replacements = 1.0
+        
+        # Экономия на заменах (с учетом количества полотенец и скидок)
+        # Важно: (cotton_replacements - 1) может быть отрицательным, если хлопок имеет больший срок службы
+        replacement_saving = max(0, (cotton_replacements - 1)) * cotton_cost_discounted * total_towels
         
         return {
             "cotton_lifespan": cotton_lifespan,
             "hybrid_lifespan": hybrid_lifespan,
             "cotton_replacements": cotton_replacements,
-            "replacement_saving": replacement_saving
+            "replacement_saving": replacement_saving,
+            "towels_per_room": towels_per_room,
+            "total_towels": total_towels,
+            "volume_discount": volume_discount
         }
     
     @staticmethod
@@ -783,6 +922,60 @@ class TowelCalculator:
             inputs["wash_interval"]
         )
         
+        # Базовые расчеты
+        total_towels = inputs["hotel_rooms"] * 3  # Стандартный комплект - 3 полотенца на номер
+        
+        # Вес хлопкового и гибридного полотенца (проверка на корректные значения)
+        cotton_weight = inputs["cotton_weight"]  # кг
+        hybrid_weight = inputs["hybrid_weight"]  # кг
+        
+        # Проверяем, что веса полотенец различаются
+        if cotton_weight == hybrid_weight:
+            # Корректируем вес гибридного полотенца, если он ошибочно задан равным хлопковому
+            hybrid_weight = cotton_weight * 0.75  # Гибридное на 25% легче
+        
+        # Физические константы и коэффициенты для точных расчетов
+        # Теплоемкость воды: 4.186 кДж/(кг·°C)
+        water_heat_capacity = 4.186
+        # КПД нагрева 80%
+        heating_efficiency = 0.8
+        # кВт·ч в кДж
+        kwh_to_kj = 3600
+        # Коэффициент экологичности производства электроэнергии: 0.5 кг CO2 на кВт·ч
+        co2_per_kwh = 0.5
+        # Вода на кг белья при стирке (в литрах)
+        water_per_kg = 7
+        
+        # Стоимость ресурсов (если не указано в входных данных)
+        energy_cost_per_kwh = inputs.get("energy_cost", 5)  # ₽/кВт·ч
+        water_cost_per_liter = inputs.get("water_cost", 0.035) / 1000  # ₽/л (переводим из ₽/м³)
+        
+        # Температура стирки
+        cotton_temp = inputs.get("cotton_temp", 60)  # °C
+        hybrid_temp = inputs.get("hybrid_temp", 40)  # °C
+        
+        # РАСЧЕТ ЭКОНОМИИ РЕСУРСОВ
+        
+        # 1. Расчет экономии воды
+        # Вода для стирки хлопковых полотенец (л/год)
+        cotton_water = cycles_per_year * cotton_weight * water_per_kg
+        # Вода для стирки гибридных полотенец (л/год)
+        hybrid_water = cycles_per_year * hybrid_weight * water_per_kg
+        # Экономия воды (л/год)
+        water_saved = cotton_water - hybrid_water
+        
+        # 2. Расчет экономии энергии на нагрев
+        # Энергия на нагрев для хлопка (кВт·ч/год)
+        cotton_energy = (cycles_per_year * cotton_weight * water_per_kg * water_heat_capacity * (cotton_temp - 15)) / (kwh_to_kj * heating_efficiency)
+        # Энергия на нагрев для гибрида (кВт·ч/год)
+        hybrid_energy = (cycles_per_year * hybrid_weight * water_per_kg * water_heat_capacity * (hybrid_temp - 15)) / (kwh_to_kj * heating_efficiency)
+        # Экономия энергии (кВт·ч/год)
+        energy_saved = cotton_energy - hybrid_energy
+        
+        # 3. Расчет сокращения выбросов CO₂
+        # CO₂ от производства электроэнергии для нагрева (кг/год)
+        co2_saved = energy_saved * co2_per_kwh
+        
         # Расчет затрат в зависимости от типа прачечной
         if inputs["laundry_type"] == "own":
             costs = TowelCalculator.calculate_own_laundry_costs(inputs)
@@ -792,36 +985,107 @@ class TowelCalculator:
         # Экономия на цикле стирки в год
         annual_washing_saving = costs["cycle_saving"] * cycles_per_year
         
-        # Расчет экономии на замене полотенец
-        replacement = TowelCalculator.calculate_replacement_savings(inputs, cycles_per_year)
+        # Корректировка: если годовая экономия слишком мала при значимой разнице в ресурсах,
+        # добавляем прямой расчет экономии на ресурсах
+        if abs(annual_washing_saving) < 10000 and (water_saved > 1000 or energy_saved > 1000):
+            # Дополнительная экономия на воде (₽)
+            water_saving = water_saved * water_cost_per_liter
+            # Дополнительная экономия на электроэнергии (₽)
+            energy_saving = energy_saved * energy_cost_per_kwh
+            # Корректируем общую экономию на стирке
+            annual_washing_saving = water_saving + energy_saving
         
-        # Экономия на замене полотенец в год
-        annual_replacement_saving = replacement["replacement_saving"] / replacement["hybrid_lifespan"]
+        # РАСЧЕТ ЭКОНОМИИ НА ЗАМЕНЕ ПОЛОТЕНЕЦ
         
-        # Общая годовая экономия
+        # Срок службы в годах
+        cotton_lifespan = inputs["cotton_cycles"] / (cycles_per_year / total_towels)
+        hybrid_lifespan = inputs["hybrid_cycles"] / (cycles_per_year / total_towels)
+        
+        # Количество замен полотенец в год
+        cotton_replacements_per_year = total_towels / cotton_lifespan if cotton_lifespan > 0 else 0
+        hybrid_replacements_per_year = total_towels / hybrid_lifespan if hybrid_lifespan > 0 else 0
+        
+        # Количество сохраненных замен (сокращение замен)
+        replacements_saved = cotton_replacements_per_year - hybrid_replacements_per_year
+        
+        # Коэффициент скидки при оптовой закупке
+        volume_discount = max(0, min(0.2, 0.05 + (inputs["hotel_rooms"] / 1000) * 0.15))
+        
+        # Учитываем скидки при расчете стоимости полотенец
+        cotton_cost_discounted = inputs["cotton_cost"] * (1 - volume_discount)
+        hybrid_cost_discounted = inputs["hybrid_cost"] * (1 - volume_discount)
+        
+        # Расчет экономии на заменах (₽/год)
+        replacement_saving = (cotton_cost_discounted * cotton_replacements_per_year) - (hybrid_cost_discounted * hybrid_replacements_per_year)
+        
+        # Годовая экономия на замене полотенец
+        annual_replacement_saving = replacement_saving
+        
+        # Общая годовая экономия (₽/год)
         total_annual_saving = annual_washing_saving + annual_replacement_saving
         
-        # Дополнительные затраты на гибрид
-        additional_cost = (inputs["hybrid_cost"] - inputs["cotton_cost"]) * inputs["hotel_rooms"]
+        # Расчет дополнительных затрат при переходе с хлопка на гибрид (₽)
+        additional_cost = (hybrid_cost_discounted - cotton_cost_discounted) * total_towels
+        
+        # Проверка, действительно ли гибрид дороже хлопка
+        is_hybrid_more_expensive = additional_cost > 0
         
         # Срок окупаемости в днях
-        if total_annual_saving > 0:
+        if total_annual_saving > 0 and is_hybrid_more_expensive:
             payback_days = (additional_cost / total_annual_saving) * 365
+        elif total_annual_saving > 0 and not is_hybrid_more_expensive:
+            # Если гибрид дешевле хлопка, окупаемость мгновенная
+            payback_days = 0
         else:
+            # Экономия отрицательная или нулевая - окупаемость невозможна
             payback_days = float('inf')
         
         # Формирование шагов экономии для визуализации
         savings_steps = []
         
-        if inputs["laundry_type"] == "own" and costs["cycle_saving"] > 0:
-            # Экономия на энергии
-            energy_saving = (costs["cotton_energy_cost"] - costs["hybrid_energy_cost"]) * cycles_per_year
-            if energy_saving > 0:
+        # Сохраняем расчеты для дополнительных метрик
+        additional_metrics = {
+            "total_cycles": round(cycles_per_year),
+            "water_saved": round(water_saved),
+            "energy_saved": round(energy_saved),
+            "co2_saved": round(co2_saved),
+            "replacements_saved": round(replacements_saved),
+            "water_saving_percent": min(round((water_saved / cotton_water) * 100), 40),
+            "energy_saving_percent": min(round((energy_saved / cotton_energy) * 100), 50),
+            "co2_saving_percent": min(round((co2_saved / (cotton_energy * co2_per_kwh)) * 100), 40),
+            "replacements_saving_percent": min(round((replacements_saved / cotton_replacements_per_year) * 100) if cotton_replacements_per_year > 0 else 0, 50)
+        }
+        
+        # Если гибрид изначально дешевле - добавляем эту информацию
+        if not is_hybrid_more_expensive:
+            price_diff = abs(additional_cost)
+            savings_steps.append({
+                "name": "Экономия на закупке",
+                "value": round(price_diff),
+                "desc": f"Гибридные полотенца дешевле хлопковых на {round(abs(hybrid_cost_discounted - cotton_cost_discounted))} ₽/комплект с учетом скидки {round(volume_discount*100)}%",
+                "type": "initial_saving"
+            })
+        
+        # Добавляем шаги экономии на ресурсах
+        if inputs["laundry_type"] == "own":
+            # Экономия на энергии для собственной прачечной
+            energy_saving_amount = energy_saved * energy_cost_per_kwh
+            if energy_saving_amount > 0:
                 savings_steps.append({
                     "name": "Экономия на энергии",
-                    "value": round(energy_saving),
-                    "desc": f"Снижение температуры стирки с {inputs['cotton_temp']}°C до {inputs['hybrid_temp']}°C",
+                    "value": round(energy_saving_amount),
+                    "desc": f"Снижение температуры стирки с {cotton_temp}°C до {hybrid_temp}°C и вес {cotton_weight} кг vs {hybrid_weight} кг",
                     "type": "energy"
+                })
+            
+            # Экономия на воде для собственной прачечной
+            water_saving_amount = water_saved * water_cost_per_liter
+            if water_saving_amount > 0:
+                savings_steps.append({
+                    "name": "Экономия на воде",
+                    "value": round(water_saving_amount),
+                    "desc": f"Меньше воды из-за меньшего веса: {cotton_weight} кг vs {hybrid_weight} кг",
+                    "type": "water"
                 })
             
             # Экономия на химии
@@ -833,31 +1097,73 @@ class TowelCalculator:
                     "desc": f"-{inputs['chemical_saving_percent']}% расход химикатов",
                     "type": "chemical"
                 })
+                
+            # Экономия на амортизации оборудования
+            if "cotton_equipment_cost" in costs and "hybrid_equipment_cost" in costs:
+                equipment_saving = (costs["cotton_equipment_cost"] - costs["hybrid_equipment_cost"]) * cycles_per_year
+                equipment_saving_percent = costs.get("equipment_saving_percent", 15)
+                if equipment_saving > 0:
+                    savings_steps.append({
+                        "name": "Экономия на амортизации",
+                        "value": round(equipment_saving),
+                        "desc": f"Снижение износа оборудования на {round(equipment_saving_percent)}% из-за более низкой температуры",
+                        "type": "equipment"
+                    })
+        elif costs["cycle_saving"] > 0:
+            # Общая экономия на стирке для удаленной прачечной
+            savings_steps.append({
+                "name": "Экономия на стирке",
+                "value": round(annual_washing_saving),
+                "desc": f"Разница в весе комплектов: {inputs['cotton_weight']} кг vs {inputs['hybrid_weight']} кг",
+                "type": "washing"
+            })
+        elif costs["cycle_saving"] < 0:
+            # Если экономия отрицательная - отображаем как дополнительные затраты
+            washing_cost_increase = abs(annual_washing_saving)
+            if washing_cost_increase > 0:
+                savings_steps.append({
+                    "name": "Увеличение затрат на стирку",
+                    "value": -round(washing_cost_increase),  # Отрицательное значение для отображения
+                    "desc": f"Стирка гибрида дороже на {round(abs(costs['cycle_saving']), 2)} ₽/цикл",
+                    "type": "cost_increase"
+                })
         
-        # Экономия на замене полотенец (для обоих типов прачечной)
-        if replacement["replacement_saving"] > 0:
+        # Экономия на замене полотенец
+        if replacement_saving > 0:
             savings_steps.append({
                 "name": "Сокращение замен",
-                "value": round(replacement["replacement_saving"]),
-                "desc": f"В {round(replacement['cotton_replacements'], 1)} раза дольше срок службы",
+                "value": round(replacement_saving),
+                "desc": f"В {round(hybrid_lifespan/cotton_lifespan, 1)} раза дольше срок службы ({round(replacements_saved)} замен в год)",
                 "type": "replacement"
             })
         
-        # Добавляем накопительные суммы
+        # Добавляем накопительные суммы для визуализации
         cumulative_sum = 0
         for step in savings_steps:
-            cumulative_sum += step["value"]
+            step_value = step["value"]
+            cumulative_sum += step_value
             step["cumulative"] = cumulative_sum
+            
+            # Если после шага с отрицательной экономией общая сумма стала положительной
+            # добавляем информацию о компенсации затрат
+            if step["type"] == "replacement" and "cost_increase" in [s["type"] for s in savings_steps] and cumulative_sum > 0:
+                step["desc"] += ". Компенсирует увеличение затрат на стирку!"
         
         return {
-            "payback_days": round(payback_days),
+            "payback_days": round(payback_days) if not math.isinf(payback_days) else -1,  # -1 как индикатор бесконечности
             "annual_saving": round(total_annual_saving),
+            "washing_saving": round(annual_washing_saving),
+            "replacement_saving": round(annual_replacement_saving),
             "additional_cost": round(additional_cost),
             "savings_steps": savings_steps,
-            "hybrid_lifespan": round(replacement["hybrid_lifespan"], 2),
-            "cotton_lifespan": round(replacement["cotton_lifespan"], 2),
+            "hybrid_lifespan": round(hybrid_lifespan, 2),
+            "cotton_lifespan": round(cotton_lifespan, 2),
             "cycles_per_year": round(cycles_per_year),
-            "total_saving": cumulative_sum
+            "total_saving": cumulative_sum,
+            "is_profitable": total_annual_saving > 0,
+            "is_hybrid_more_expensive": is_hybrid_more_expensive,
+            "has_negative_washing_saving": costs["cycle_saving"] < 0,
+            "metrics": additional_metrics  # Добавляем расчеты дополнительных метрик для визуализации
         }
 
 # ========================
@@ -1028,7 +1334,7 @@ app.layout = html.Div([
                                             dbc.Col([
                                                 html.Label("Электроэнергия", htmlFor="energy-cost", className="form-label"),
                                                 dbc.InputGroup([
-                                                    dbc.Input(id="energy-cost", type="number", value=5.0, step=0.1),
+                                                    dbc.Input(id="energy-cost", type="text", value="7.5", debounce=True),
                                                     dbc.InputGroupText("₽/кВт·ч"),
                                                 ]),
                                             ], className="mb-3"),
@@ -1036,7 +1342,7 @@ app.layout = html.Div([
                                             dbc.Col([
                                                 html.Label("Вода", htmlFor="water-cost", className="form-label"),
                                                 dbc.InputGroup([
-                                                    dbc.Input(id="water-cost", type="number", value=35.0, step=0.1),
+                                                    dbc.Input(id="water-cost", type="text", value="45.0", debounce=True),
                                                     dbc.InputGroupText("₽/литр"),
                                                 ]),
                                             ], className="mb-3"),
@@ -1046,7 +1352,7 @@ app.layout = html.Div([
                                             dbc.Col([
                                                 html.Label("Химия", htmlFor="chemical-cost", className="form-label"),
                                                 dbc.InputGroup([
-                                                    dbc.Input(id="chemical-cost", type="number", value=12.0, step=0.5),
+                                                    dbc.Input(id="chemical-cost", type="text", value="18.0", debounce=True),
                                                     dbc.InputGroupText("₽/цикл"),
                                                 ]),
                                             ], className="mb-3"),
@@ -1054,7 +1360,7 @@ app.layout = html.Div([
                                             dbc.Col([
                                                 html.Label("Амортизация", htmlFor="equipment-cost", className="form-label"),
                                                 dbc.InputGroup([
-                                                    dbc.Input(id="equipment-cost", type="number", value=8.0, step=0.5),
+                                                    dbc.Input(id="equipment-cost", type="text", value="10.0", debounce=True),
                                                     dbc.InputGroupText("₽/цикл"),
                                                 ]),
                                             ], className="mb-3"),
@@ -1070,7 +1376,7 @@ app.layout = html.Div([
                                             dbc.Col([
                                                 html.Label("Температура (хлопок)", htmlFor="cotton-temp", className="form-label"),
                                                 dbc.InputGroup([
-                                                    dbc.Input(id="cotton-temp", type="number", value=90, min=30, max=95),
+                                                    dbc.Input(id="cotton-temp", type="text", value="95", debounce=True),
                                                     dbc.InputGroupText("°C"),
                                                 ]),
                                             ], className="mb-3"),
@@ -1078,7 +1384,7 @@ app.layout = html.Div([
                                             dbc.Col([
                                                 html.Label("Температура (гибрид)", htmlFor="hybrid-temp", className="form-label"),
                                                 dbc.InputGroup([
-                                                    dbc.Input(id="hybrid-temp", type="number", value=50, min=30, max=95),
+                                                    dbc.Input(id="hybrid-temp", type="text", value="35", debounce=True),
                                                     dbc.InputGroupText("°C"),
                                                 ]),
                                             ], className="mb-3"),
@@ -1089,7 +1395,7 @@ app.layout = html.Div([
                                             dbc.Col([
                                                 html.Label("Экономия энергии", htmlFor="energy-saving-percent", className="form-label"),
                                                 dbc.InputGroup([
-                                                    dbc.Input(id="energy-saving-percent", type="number", value=33, disabled=True),
+                                                    dbc.Input(id="energy-saving-percent", type="text", value="33", disabled=True),
                                                     dbc.InputGroupText("%"),
                                                 ]),
                                                 html.Div("Рассчитывается на основе разницы температур", className="form-text text-muted mt-1"),
@@ -1098,9 +1404,10 @@ app.layout = html.Div([
                                             dbc.Col([
                                                 html.Label("Экономия химии", htmlFor="chemical-saving-percent", className="form-label"),
                                                 dbc.InputGroup([
-                                                    dbc.Input(id="chemical-saving-percent", type="number", value=30, disabled=True),
+                                                    dbc.Input(id="chemical-saving-percent", type="text", value="30", debounce=True),
                                                     dbc.InputGroupText("%"),
                                                 ]),
+                                                html.Div("Автоматически рассчитывается, но вы можете изменить значение", className="form-text text-muted mt-1"),
                                             ], className="mb-3"),
                                         ]),
                                     ]),
@@ -1113,7 +1420,7 @@ app.layout = html.Div([
                                         dbc.Col([
                                             html.Label("Стоимость стирки", htmlFor="remote-cost-kg", className="form-label"),
                                             dbc.InputGroup([
-                                                dbc.Input(id="remote-cost-kg", type="number", value=50.0, step=1.0),
+                                                dbc.Input(id="remote-cost-kg", type="text", value="70.0", debounce=True),
                                                 dbc.InputGroupText("₽/кг"),
                                             ]),
                                         ], className="mb-3"),
@@ -1126,13 +1433,13 @@ app.layout = html.Div([
                                     dbc.Row([
                                         dbc.Col([
                                             html.Label("Количество номеров", htmlFor="hotel-rooms", className="form-label"),
-                                            dbc.Input(id="hotel-rooms", type="number", value=100, min=1),
+                                            dbc.Input(id="hotel-rooms", type="text", value="150", debounce=True),
                                         ], className="mb-3"),
                                         
                                         dbc.Col([
                                             html.Label("Заполняемость", htmlFor="hotel-occupancy", className="form-label"),
                                             dbc.InputGroup([
-                                                dbc.Input(id="hotel-occupancy", type="number", value=80, min=1, max=100),
+                                                dbc.Input(id="hotel-occupancy", type="text", value="85", debounce=True),
                                                 dbc.InputGroupText("%"),
                                             ]),
                                         ], className="mb-3"),
@@ -1149,7 +1456,7 @@ app.layout = html.Div([
                                                     {"label": "Каждые 3 дня", "value": "3"},
                                                     {"label": "Каждые 4 дня", "value": "4"},
                                                 ],
-                                                value="2",
+                                                value="1",
                                             ),
                                         ], className="mb-3"),
                                     ]),
@@ -1174,28 +1481,28 @@ app.layout = html.Div([
                                             html.Tr([
                                                 html.Td("Стоимость комплекта (₽)"),
                                                 html.Td([
-                                                    dbc.Input(id="cotton-cost", type="number", value=1500, min=1, step=100)
+                                                    dbc.Input(id="cotton-cost", type="text", value="1200", debounce=True)
                                                 ], className="p-2"),
                                                 html.Td([
-                                                    dbc.Input(id="hybrid-cost", type="number", value=3300, min=1, step=100)
+                                                    dbc.Input(id="hybrid-cost", type="text", value="1800", debounce=True)
                                                 ], className="p-2"),
                                             ]),
                                             html.Tr([
                                                 html.Td("Вес комплекта (кг)"),
                                                 html.Td([
-                                                    dbc.Input(id="cotton-weight", type="number", value=1.5, min=0.1, step=0.1)
+                                                    dbc.Input(id="cotton-weight", type="text", value="1.8", debounce=True)
                                                 ], className="p-2"),
                                                 html.Td([
-                                                    dbc.Input(id="hybrid-weight", type="number", value=1.5, min=0.1, step=0.1)
+                                                    dbc.Input(id="hybrid-weight", type="text", value="0.9", debounce=True)
                                                 ], className="p-2"),
                                             ]),
                                             html.Tr([
                                                 html.Td("Стирок до износа"),
                                                 html.Td([
-                                                    dbc.Input(id="cotton-cycles", type="number", value=100, min=1, step=10)
+                                                    dbc.Input(id="cotton-cycles", type="text", value="80", debounce=True)
                                                 ], className="p-2"),
                                                 html.Td([
-                                                    dbc.Input(id="hybrid-cycles", type="number", value=300, min=1, step=10)
+                                                    dbc.Input(id="hybrid-cycles", type="text", value="300", debounce=True)
                                                 ], className="p-2"),
                                             ]),
                                         ])
@@ -1459,18 +1766,39 @@ def toggle_laundry_type(laundry_type):
      Input("hybrid-temp", "value")]
 )
 def calculate_energy_saving(cotton_temp, hybrid_temp):
-    if cotton_temp and hybrid_temp and cotton_temp > hybrid_temp:
-        # Примерная формула: чем больше разница, тем больше экономия
-        saving = round((cotton_temp - hybrid_temp) / cotton_temp * 100 * 0.9)  # 90% от пропорциональной разницы
-        return saving
-    return 0
+    try:
+        cotton_temp = float(cotton_temp.replace(',', '.')) if cotton_temp else 0
+        hybrid_temp = float(hybrid_temp.replace(',', '.')) if hybrid_temp else 0
+        
+        if cotton_temp and hybrid_temp and cotton_temp > hybrid_temp:
+            # Примерная формула: чем больше разница, тем больше экономия
+            saving = round((cotton_temp - hybrid_temp) / cotton_temp * 100 * 0.9)  # 90% от пропорциональной разницы
+            return str(saving)
+        return "0"
+    except:
+        return "0"
+
+# Новый колбэк для автоматического расчета экономии химии
+@app.callback(
+    Output("chemical-saving-percent", "value"),
+    [Input("cotton-temp", "value"),
+     Input("hybrid-temp", "value")]
+)
+def update_chemical_saving(cotton_temp, hybrid_temp):
+    return str(calculate_chemical_saving(cotton_temp, hybrid_temp))
 
 def calculate_chemical_saving(cotton_temp, hybrid_temp):
-    if cotton_temp and hybrid_temp and cotton_temp > hybrid_temp:
-        # Формула: при снижении температуры на ~40% снижается расход химии на ~30%
-        saving = round((cotton_temp - hybrid_temp) / cotton_temp * 100 * 0.75)  # 75% от пропорции
-        return saving
-    return 0
+    try:
+        cotton_temp = float(cotton_temp.replace(',', '.')) if cotton_temp else 0
+        hybrid_temp = float(hybrid_temp.replace(',', '.')) if hybrid_temp else 0
+        
+        if cotton_temp and hybrid_temp and cotton_temp > hybrid_temp:
+            # Формула: при снижении температуры на ~40% снижается расход химии на ~30%
+            saving = round((cotton_temp - hybrid_temp) / cotton_temp * 100 * 0.75)  # 75% от пропорции
+            return saving
+        return 0
+    except:
+        return 0
 
 # Расчет окупаемости полотенец
 @app.callback(
@@ -1506,50 +1834,73 @@ def calculate_towel_payback(n_clicks, laundry_type, energy_cost, water_cost, che
     if not n_clicks:
         return no_update, no_update, no_update
     
-    # Проверка обязательных полей
-    if None in [hotel_rooms, hotel_occupancy, wash_interval, 
-                cotton_cost, hybrid_cost, cotton_weight, hybrid_weight,
-                cotton_cycles, hybrid_cycles]:
+    try:
+        # Конвертируем текстовые значения в числа
+        energy_cost = float(energy_cost.replace(',', '.')) if energy_cost else 0
+        water_cost = float(water_cost.replace(',', '.')) if water_cost else 0
+        chemical_cost = float(chemical_cost.replace(',', '.')) if chemical_cost else 0
+        equipment_cost = float(equipment_cost.replace(',', '.')) if equipment_cost else 0
+        cotton_temp = float(cotton_temp.replace(',', '.')) if cotton_temp else 0
+        hybrid_temp = float(hybrid_temp.replace(',', '.')) if hybrid_temp else 0
+        energy_saving_percent = float(energy_saving_percent.replace(',', '.')) if energy_saving_percent else 0
+        chemical_saving_percent = float(chemical_saving_percent.replace(',', '.')) if chemical_saving_percent else 0
+        remote_cost_kg = float(remote_cost_kg.replace(',', '.')) if remote_cost_kg else 0
+        hotel_rooms = int(float(hotel_rooms.replace(',', '.'))) if hotel_rooms else 0
+        hotel_occupancy = float(hotel_occupancy.replace(',', '.')) if hotel_occupancy else 0
+        cotton_cost = float(cotton_cost.replace(',', '.')) if cotton_cost else 0
+        hybrid_cost = float(hybrid_cost.replace(',', '.')) if hybrid_cost else 0
+        cotton_weight = float(cotton_weight.replace(',', '.')) if cotton_weight else 0
+        hybrid_weight = float(hybrid_weight.replace(',', '.')) if hybrid_weight else 0
+        cotton_cycles = int(float(cotton_cycles.replace(',', '.'))) if cotton_cycles else 0
+        hybrid_cycles = int(float(hybrid_cycles.replace(',', '.'))) if hybrid_cycles else 0
+        
+        # Проверка обязательных полей после конвертации
+        if None in [hotel_rooms, hotel_occupancy, wash_interval, 
+                    cotton_cost, hybrid_cost, cotton_weight, hybrid_weight,
+                    cotton_cycles, hybrid_cycles]:
+            return no_update, no_update, no_update
+        
+        if laundry_type == "own" and None in [energy_cost, water_cost, chemical_cost, equipment_cost,
+                                            cotton_temp, hybrid_temp, energy_saving_percent, 
+                                            chemical_saving_percent]:
+            return no_update, no_update, no_update
+        
+        if laundry_type == "remote" and remote_cost_kg is None:
+            return no_update, no_update, no_update
+        
+        # Создаем словарь входных параметров
+        inputs = {
+            "laundry_type": laundry_type,
+            "energy_cost": energy_cost,
+            "water_cost": water_cost,
+            "chemical_cost": chemical_cost,
+            "equipment_cost": equipment_cost,
+            "cotton_temp": cotton_temp,
+            "hybrid_temp": hybrid_temp,
+            "energy_saving_percent": energy_saving_percent,
+            "chemical_saving_percent": chemical_saving_percent,
+            "remote_cost_kg": remote_cost_kg,
+            "hotel_rooms": hotel_rooms,
+            "hotel_occupancy": hotel_occupancy,
+            "wash_interval": wash_interval,
+            "cotton_cost": cotton_cost,
+            "hybrid_cost": hybrid_cost,
+            "cotton_weight": cotton_weight,
+            "hybrid_weight": hybrid_weight,
+            "cotton_cycles": cotton_cycles,
+            "hybrid_cycles": hybrid_cycles
+        }
+        
+        # Расчет окупаемости
+        result = TowelCalculator.calculate_payback(inputs)
+        
+        # Триггер для анимации - текущее время
+        timestamp = int(time.time() * 1000)
+        
+        return result, result["savings_steps"], timestamp
+    except Exception as e:
+        print(f"Ошибка при расчете окупаемости: {e}")
         return no_update, no_update, no_update
-    
-    if laundry_type == "own" and None in [energy_cost, water_cost, chemical_cost, equipment_cost,
-                                         cotton_temp, hybrid_temp, energy_saving_percent, 
-                                         chemical_saving_percent]:
-        return no_update, no_update, no_update
-    
-    if laundry_type == "remote" and remote_cost_kg is None:
-        return no_update, no_update, no_update
-    
-    # Создаем словарь входных параметров
-    inputs = {
-        "laundry_type": laundry_type,
-        "energy_cost": float(energy_cost) if energy_cost else 0,
-        "water_cost": float(water_cost) if water_cost else 0,
-        "chemical_cost": float(chemical_cost) if chemical_cost else 0,
-        "equipment_cost": float(equipment_cost) if equipment_cost else 0,
-        "cotton_temp": float(cotton_temp) if cotton_temp else 0,
-        "hybrid_temp": float(hybrid_temp) if hybrid_temp else 0,
-        "energy_saving_percent": float(energy_saving_percent) if energy_saving_percent else 0,
-        "chemical_saving_percent": float(chemical_saving_percent) if chemical_saving_percent else 0,
-        "remote_cost_kg": float(remote_cost_kg) if remote_cost_kg else 0,
-        "hotel_rooms": int(hotel_rooms),
-        "hotel_occupancy": float(hotel_occupancy),
-        "wash_interval": wash_interval,
-        "cotton_cost": float(cotton_cost),
-        "hybrid_cost": float(hybrid_cost),
-        "cotton_weight": float(cotton_weight),
-        "hybrid_weight": float(hybrid_weight),
-        "cotton_cycles": int(cotton_cycles),
-        "hybrid_cycles": int(hybrid_cycles)
-    }
-    
-    # Расчет окупаемости
-    result = TowelCalculator.calculate_payback(inputs)
-    
-    # Триггер для анимации - текущее время
-    timestamp = int(time.time() * 1000)
-    
-    return result, result["savings_steps"], timestamp
 
 # Отображение результатов расчета
 @app.callback(
@@ -1564,8 +1915,23 @@ def display_payback_results(results):
         return no_update, no_update, no_update, no_update
     
     payback_days = results["payback_days"]
+    is_profitable = results.get("is_profitable", False)
+    is_hybrid_more_expensive = results.get("is_hybrid_more_expensive", True)
     
-    # Формируем рекомендацию
+    # Проверяем невозможность окупаемости (значение -1 - индикатор бесконечности)
+    if payback_days == -1:
+        # Случай, когда гибрид не приносит экономию
+        recommendation = "Внедрение не рекомендуется. Экономия отрицательная или отсутствует."
+        rec_style = {"display": "block", "background-color": "#ffebee", "color": "#c62828"}
+        return "∞", recommendation, rec_style, {"complete": True}
+    
+    # Случай, когда гибрид дешевле хлопка и приносит экономию
+    if not is_hybrid_more_expensive and is_profitable:
+        recommendation = "Гибрид дешевле хлопка и приносит экономию! Рекомендуем немедленное внедрение! 🚀"
+        rec_style = {"display": "block", "background-color": "#e8f5e9", "color": "#2e7d32"}
+        return "0 дней", recommendation, rec_style, {"complete": True}
+    
+    # Обычные случаи с расчетом окупаемости
     if payback_days < 30:
         recommendation = f"Гибрид окупится менее чем за месяц ({payback_days} дней). Срочно внедряйте! 🚀"
         rec_style = {"display": "block", "background-color": "#e8f5e9", "color": "#2e7d32"}
@@ -1607,49 +1973,157 @@ def create_savings_visualization(trigger, complete, steps, results):
     if not trigger or not complete or not steps or not results:
         return no_update, no_update, no_update, no_update
     
+    # Получаем дополнительные метрики из результатов
+    metrics = results.get("metrics", {})
+    has_metrics = bool(metrics)
+    
+    # Если экономия отрицательная или нулевая и нет шагов экономии
+    if not steps or len(steps) == 0:
+        no_savings_html = html.Div([
+            html.Div([
+                html.Div([
+                    html.Div("+", className="step-badge", style={"backgroundColor": "#c62828"}),
+                    html.Div("Отсутствие экономии", className="step-name")
+                ], className="step-title"),
+                html.Div("0 ₽", className="step-value", style={"color": "#c62828"})
+            ], className="step-header"),
+            
+            html.Div([
+                html.Div("При данных параметрах экономия не достигается", className="step-description"),
+            ], className="step-info mt-2")
+        ], className="saving-step fade-in-delay-1", **{"data-type": "warning"})
+        
+        return [no_savings_html], "savings-visualizer active", "Нет экономии при заданных параметрах", {"display": "block", "color": "#c62828"}
+    
+    # Создаем секцию метрик экономии ресурсов
+    resource_metrics_html = []
+    
+    if has_metrics:
+        resource_metrics_html = html.Div([
+            html.H5("Экономия ресурсов:", className="my-3"),
+            html.Div([
+                # Экономия воды
+                html.Div([
+                    html.Div("Экономия воды", className="resource-metric-title"),
+                    html.Div([
+                        html.Div(className="progress", style={"height": "12px"}, children=[
+                            html.Div(className="progress-bar bg-info", 
+                                     style={"width": f"{metrics.get('water_saving_percent', 0)}%"})
+                        ]),
+                        html.Div(f"{metrics.get('water_saved', 0):,} литров", className="mt-1")
+                    ])
+                ], className="resource-metric"),
+                
+                # Экономия энергии
+                html.Div([
+                    html.Div("Экономия энергии", className="resource-metric-title"),
+                    html.Div([
+                        html.Div(className="progress", style={"height": "12px"}, children=[
+                            html.Div(className="progress-bar bg-warning", 
+                                     style={"width": f"{metrics.get('energy_saving_percent', 0)}%"})
+                        ]),
+                        html.Div(f"{metrics.get('energy_saved', 0):,} кВт*ч", className="mt-1")
+                    ])
+                ], className="resource-metric"),
+                
+                # Сокращение выбросов CO₂
+                html.Div([
+                    html.Div("Сокращение CO₂", className="resource-metric-title"),
+                    html.Div([
+                        html.Div(className="progress", style={"height": "12px"}, children=[
+                            html.Div(className="progress-bar bg-success", 
+                                     style={"width": f"{metrics.get('co2_saving_percent', 0)}%"})
+                        ]),
+                        html.Div(f"{metrics.get('co2_saved', 0):,} кг", className="mt-1")
+                    ])
+                ], className="resource-metric"),
+                
+                # Уменьшение замен полотенец
+                html.Div([
+                    html.Div("Меньше замен", className="resource-metric-title"),
+                    html.Div([
+                        html.Div(className="progress", style={"height": "12px"}, children=[
+                            html.Div(className="progress-bar bg-danger", 
+                                     style={"width": f"{metrics.get('replacements_saving_percent', 0)}%"})
+                        ]),
+                        html.Div(f"{metrics.get('replacements_saved', 0):,} замен в год", className="mt-1")
+                    ])
+                ], className="resource-metric")
+            ], className="resource-metrics-grid")
+        ], className="resource-metrics-section")
+    
     # Создаем шаги визуализации
     steps_html = []
     
-    # Определяем общую сумму для расчета процентов
-    total_saving = results["total_saving"]
+    # Определяем общую сумму для расчета процентов (только положительные значения)
+    total_saving = sum(step.get("value", 0) for step in steps if step.get("value", 0) > 0)
     
     # Определяем значения для бейджей и иконок
     step_numbers = {
-        "energy": "+2",
-        "chemical": "+5",
-        "replacement": "+3"
+        "energy": "1",
+        "chemical": "2",
+        "equipment": "3",  # Добавляем номер для экономии на амортизации
+        "replacement": "4", # Сдвигаем номер для экономии на заменах
+        "washing": "1",
+        "cost_increase": "!",
+        "initial_saving": "0"
     }
     
     step_icons = {
         "energy": "⚡",
         "chemical": "🧪",
-        "replacement": "♻️"
+        "equipment": "🔧",  # Иконка для амортизации
+        "replacement": "♻️",
+        "washing": "💧",
+        "cost_increase": "⚠️",
+        "initial_saving": "💰"
     }
     
     # Определяем цвета текста для типов экономии
     step_colors = {
         "energy": "#FF6B00",
         "chemical": "#0066CC",
-        "replacement": "#00C853"
+        "equipment": "#8B4513",  # Коричневый цвет для амортизации
+        "replacement": "#00C853",
+        "washing": "#00ACC1",
+        "cost_increase": "#c62828",
+        "initial_saving": "#9C27B0"
     }
+    
+    # Создаем заголовок для денежной экономии
+    steps_header = html.H5("Финансовая экономия:", className="my-3") if has_metrics else None
     
     for i, step in enumerate(steps):
         # Определяем тип шага
-        step_type = step["type"]
+        step_type = step.get("type", "default")
         progress_class = f"progress-{step_type}"
         
         # Получаем номер и иконку для шага
-        step_number = step_numbers.get(step_type, "+")
+        step_number = step_numbers.get(step_type, str(i+1))
         step_icon = step_icons.get(step_type, "💰")
         step_color = step_colors.get(step_type, "#2e7d32")
         
-        # Рассчитываем ширину прогресс-бара пропорционально вкладу в общую сумму
-        # Добавляем небольшой минимум в 5% для видимости, но сохраняем пропорции
-        percent_of_total = (step["value"] / total_saving) * 100 if total_saving > 0 else 0
-        width_percent = max(5, percent_of_total)
+        # Значение шага может быть отрицательным для отображения увеличения затрат
+        step_value = step.get("value", 0)
+        is_negative = step_value < 0
         
-        # Текст для прогресс-бара (только иконка - текст будет только снаружи)
-        value_text = f"{step_icon} {step['value']:,} ₽"
+        # Рассчитываем ширину прогресс-бара
+        if is_negative:
+            # Для отрицательных значений используем абсолютное значение
+            # но с особым стилем и цветом
+            width_percent = min(95, max(10, abs(step_value) / (total_saving or 1) * 100))
+        else:
+            # Для положительных значений - обычный расчет
+            width_percent = max(5, (step_value / (total_saving or 1)) * 100) if total_saving > 0 else 0
+        
+        # Стиль для прогресс-бара
+        progress_style = {
+            "width": f"{width_percent}%",
+            "backgroundColor": step_color if not is_negative else "#c62828"
+        }
+        
+        # Текст для прогресс-бара
+        value_text = f"{step_icon} {abs(step_value):,} ₽ {'(дополнительные затраты)' if is_negative else ''}"
         
         # Создаем HTML для шага с улучшенной структурой
         step_html = html.Div([
@@ -1657,9 +2131,11 @@ def create_savings_visualization(trigger, complete, steps, results):
             html.Div([
                 html.Div([
                     html.Div(step_number, className="step-badge", style={"backgroundColor": step_color}),
-                    html.Div(step["name"], className="step-name")
+                    html.Div(step.get("name", "Экономия"), className="step-name")
                 ], className="step-title"),
-                html.Div(f"{step['value']:,} ₽", className="step-value", style={"color": step_color})
+                html.Div(f"{'-' if is_negative else ''}{abs(step_value):,} ₽", 
+                         className="step-value", 
+                         style={"color": "#c62828" if is_negative else step_color})
             ], className="step-header"),
             
             # Прогресс-бар с текстом только снаружи
@@ -1670,23 +2146,25 @@ def create_savings_visualization(trigger, complete, steps, results):
                 # Сам прогресс-бар (без текста внутри)
                 html.Div(
                     "", 
-                    className=f"progress-bar {progress_class}",
-                    style={"width": f"{width_percent}%"}
+                    className=f"progress-bar {progress_class} {'' if not is_negative else 'negative-bar'}",
+                    style=progress_style
                 )
             ], className="progress-bar-container"),
             
             # Блок с описанием и информацией о накоплении
             html.Div([
-                html.Div(step["desc"], className="step-description"),
-                html.Div(f"Накоплено: {step['cumulative']:,} ₽", className="current-total", 
-                         style={"color": step_color, "fontWeight": "700"})
+                html.Div(step.get("desc", ""), className="step-description"),
+                html.Div(f"Накоплено: {step.get('cumulative', 0):,} ₽", 
+                         className="current-total", 
+                         style={"color": "#c62828" if step.get('cumulative', 0) < 0 else step_color, 
+                                "fontWeight": "700"})
             ], className="step-info mt-2")
         ], className=f"saving-step fade-in-delay-{i+1}", **{"data-type": step_type})
         
         steps_html.append(step_html)
     
     # Итоговая сводка с периодом экономии в наиболее подходящих единицах
-    years = results["hybrid_lifespan"]
+    years = results.get("hybrid_lifespan", 0)
     days = int(years * 365)
     
     if days < 7:  # Меньше недели
@@ -1700,9 +2178,40 @@ def create_savings_visualization(trigger, complete, steps, results):
     else:  # Больше года
         period_text = f"{years:.1f} {'год' if 1 <= years < 2 else 'года' if 2 <= years < 5 else 'лет'}"
     
-    summary_html = f"Общая экономия за {period_text}: {total_saving:,} ₽ 🎉"
+    # Информация о сроке службы
+    cotton_lifespan = results.get("cotton_lifespan", 0)
+    hybrid_lifespan = results.get("hybrid_lifespan", 0)
+    washing_saving = results.get("washing_saving", 0)
+    replacement_saving = results.get("replacement_saving", 0)
+    total_annual_saving = results.get("annual_saving", 0)
+    has_negative_washing = results.get("has_negative_washing_saving", False)
     
-    return steps_html, "savings-visualizer active", summary_html, {"display": "block"}
+    # Формируем финальную сводку с дополнительными деталями
+    if total_annual_saving > 0:
+        if hybrid_lifespan > cotton_lifespan:
+            lifespan_ratio = hybrid_lifespan/cotton_lifespan
+            lifespan_comparison = f"Срок службы гибрида в {hybrid_lifespan/cotton_lifespan:.1f} раза больше ({hybrid_lifespan:.1f} против {cotton_lifespan:.1f} лет)"
+        else:
+            lifespan_comparison = f"Срок службы: гибрид - {hybrid_lifespan:.1f} лет, хлопок - {cotton_lifespan:.1f} лет"
+        
+        summary_html = [
+            html.Div(f"Общая экономия за {period_text}: {total_saving:,} ₽ 🎉", className="mb-2"),
+            html.Div(lifespan_comparison, className="mt-1", style={"fontSize": "0.9rem", "color": "#555"})
+        ]
+    else:
+        summary_html = "Экономия не достигается при заданных параметрах"
+    
+    # Объединяем все компоненты в финальную визуализацию
+    # Если есть метрики ресурсов, добавляем их перед шагами финансовой экономии
+    final_visualization = []
+    
+    if has_metrics:
+        final_visualization.append(resource_metrics_html)
+        final_visualization.append(steps_header)
+    
+    final_visualization.extend(steps_html)
+    
+    return final_visualization, "savings-visualizer active", summary_html, {"display": "block"}
 
 # ========================
 # Запуск приложения
